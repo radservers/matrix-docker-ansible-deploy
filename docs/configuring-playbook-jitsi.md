@@ -14,7 +14,7 @@ Before installing Jitsi, make sure you've created the `jitsi.DOMAIN` DNS record.
 You may also need to open the following ports to your server:
 
 - `4443/tcp` - RTP media fallback over TCP
-- `10000/udp` - RTP media over UDP. Depending on your firewall/NAT setup, incoming RTP packets on port `10000` may have the external IP of your firewall as destination address, due to the usage of STUN in JVB (see [`matrix_jitsi_jvb_stun_servers`](../roles/matrix-jitsi/defaults/main.yml)).
+- `10000/udp` - RTP media over UDP. Depending on your firewall/NAT setup, incoming RTP packets on port `10000` may have the external IP of your firewall as destination address, due to the usage of STUN in JVB (see [`matrix_jitsi_jvb_stun_servers`](../roles/custom/matrix-jitsi/defaults/main.yml)).
 
 
 ## Installation
@@ -87,7 +87,7 @@ For more information refer to the [docker-jitsi-meet](https://github.com/jitsi/d
 
 By default the Jitsi Meet instance does not work with a client in LAN (Local Area Network), even if others are connected from WAN. There are no video and audio. In the case of WAN to WAN everything is ok.
 
-The reason is the Jitsi VideoBridge git to LAN client the IP address of the docker image instead of the host. The [documentation](https://github.com/jitsi/docker-jitsi-meet#running-behind-nat-or-on-a-lan-environment) of Jitsi in docker suggest to add `DOCKER_HOST_ADDRESS` in enviornment variable to make it work.
+The reason is the Jitsi VideoBridge git to LAN client the IP address of the docker image instead of the host. The [documentation](https://jitsi.github.io/handbook/docs/devops-guide/devops-guide-docker/#running-behind-nat-or-on-a-lan-environment) of Jitsi in docker suggest to add `JVB_ADVERTISE_IPS` in enviornment variable to make it work.
 
 Here is how to do it in the playbook.
 
@@ -95,7 +95,7 @@ Add these two lines to your `inventory/host_vars/matrix.DOMAIN/vars.yml` configu
 
 ```yaml
 matrix_jitsi_jvb_container_extra_arguments:
-  - '--env "DOCKER_HOST_ADDRESS=<Local IP adress of the host>"'
+  - '--env "JVB_ADVERTISE_IPS=<Local IP address of the host>"'
 ```
 
 ## (Optional) Fine tune Jitsi
@@ -126,6 +126,80 @@ This feature is found by default in other webconference applications such as Off
 Read how it works [here](https://github.com/jitsi/jitsi-videobridge/blob/master/doc/last-n.md) and performance evaluation on this [study](https://jitsi.org/wp-content/uploads/2016/12/nossdav2015lastn.pdf).
 
 You may want to **limit the maximum video resolution**, to save up resources on both server and clients.
+
+## (Optional) Specify a Max number of participants on a Jitsi conference
+
+The playbook allows a user to set a max number of participants allowed to join a Jitsi conference. By default there is no limit.
+
+In order to set the max number of participants add the following variable to your `inventory/host_vars/matrix.DOMAIN/vars.yml` configuration:
+
+```
+matrix_prosody_jitsi_max_participants: <INTEGER OF MAX PARTICPANTS>
+```
+
+## (Optional) Additional JVBs
+
+By default, a single JVB ([Jitsi VideoBridge](https://github.com/jitsi/jitsi-videobridge)) is deployed on the same host as the Matrix server. To allow more video-conferences to happen at the same time, you may need to provision additional JVB services on other hosts.
+
+There is an ansible playbook that can be run with the following tag:
+` ansible-playbook -i inventory/hosts --limit jitsi_jvb_servers jitsi_jvb.yml --tags=common,setup-additional-jitsi-jvb,start`
+
+For this role to work you will need an additional section in the ansible hosts file with the details of the JVB hosts, for example:
+```
+[jitsi_jvb_servers]
+<your jvb hosts> ansible_host=<ip address of the jvb host>
+```
+
+Each JVB will require a server id to be set so that it can be uniquely identified and this allows Jitsi to keep track of which conferences are on which JVB.  
+The server id is set with the variable `matrix_jitsi_jvb_server_id` which ends up as the JVB_WS_SERVER_ID environment variables in the JVB docker container. 
+This variable can be set via the host file, a parameter to the ansible command or in the `vars.yaml` for the host which will have the additional JVB. For example:
+
+``` yaml
+matrix_jitsi_jvb_server_id: 'jvb-2'
+```
+
+``` INI
+[jitsi_jvb_servers]
+jvb-2.example.com ansible_host=192.168.0.2 matrix_jitsi_jvb_server_id=jvb-2
+jvb-3.example.com ansible_host=192.168.0.3 matrix_jitsi_jvb_server_id=jvb-2
+```
+
+Note that the server id `jvb-1` is reserved for the JVB instance running on the Matrix host and therefore should not be used as the id of an additional jvb host.
+
+The additional JVB will also need to expose the colibri web socket port and this can be done with the following variable:
+
+```yaml
+matrix_jitsi_jvb_container_colibri_ws_host_bind_port: 9090
+```
+
+The JVB will also need to know where the prosody xmpp server is located, similar to the server id this can be set in the vars for the JVB by using the variable 
+`matrix_jitsi_xmpp_server`. The Jitsi prosody container is deployed on the matrix server by default so the value can be set to the matrix domain. For example:
+
+```yaml
+matrix_jitsi_xmpp_server: "{{ matrix_domain }}"
+```
+
+However, it can also be set the ip address of the matrix server. This can be useful if you wish to use a private ip. For example:
+
+```yaml
+matrix_jitsi_xmpp_server: "192.168.0.1"
+```
+
+The nginx configuration will also need to be updated in order to deal with the additional JVB servers. This is achieved via its own configuration variable
+`matrix_nginx_proxy_proxy_jitsi_additional_jvbs`, which contains a dictionary of server ids to ip addresses.
+
+For example,
+
+``` yaml
+matrix_nginx_proxy_proxy_jitsi_additional_jvbs:
+   jvb-2: 192.168.0.2
+   jvb-3: 192.168.0.3
+```
+
+
+Applied together this will allow you to provision extra JVB instances which will register themselves with the prosody service and be available for jicofo 
+to route conferences too.
+
 
 
 ## Apply changes

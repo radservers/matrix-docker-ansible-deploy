@@ -74,6 +74,7 @@ By default, it obtains certificates for:
 - possibly for `jitsi.<your-domain>`, if you have explicitly [set up Jitsi](configuring-playbook-jitsi.md).
 - possibly for `stats.<your-domain>`, if you have explicitly [set up Grafana](configuring-playbook-prometheus-grafana.md).
 - possibly for `sygnal.<your-domain>`, if you have explicitly [set up Sygnal](configuring-playbook-sygnal.md).
+- possibly for `ntfy.<your-domain>`, if you have explicitly [set up ntfy](configuring-playbook-ntfy.md).
 - possibly for your base domain (`<your-domain>`), if you have explicitly configured [Serving the base domain](configuring-playbook-base-domain-serving.md)
 
 If you are hosting other domains on the Matrix machine, you can make the playbook obtain and renew certificates for those other domains too.
@@ -98,7 +99,7 @@ The certificate files would be made available in `/matrix/ssl/config/live/<your-
 
 For automated certificate renewal to work, each port `80` vhost for each domain you are obtaining certificates for needs to forward requests for `/.well-known/acme-challenge` to the certbot container we use for renewal.
 
-See how this is configured for the `matrix.` subdomain in `/matrix/nginx-proxy/conf.d/matrix-synapse.conf`
+See how this is configured for the `matrix.` subdomain in `/matrix/nginx-proxy/conf.d/matrix-domain.conf`
 Don't be alarmed if the above configuration file says port `8080`, instead of port `80`. It's due to port mapping due to our use of containers.
 
 
